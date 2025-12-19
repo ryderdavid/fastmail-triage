@@ -136,7 +136,7 @@ const FastmailTriage = () => {
 
   const classifyEmails = async (emailList) => {
     const emailTexts = emailList.map((email, idx) =>
-      `Email ${idx}:\nFrom: ${email.from?.[0]?.email || 'Unknown'}\nSubject: ${email.subject}\nPreview: ${email.preview}`
+      `Email ${idx} (ID: ${email.id}):\nFrom: ${email.from?.[0]?.email || 'Unknown'}\nSubject: ${email.subject}\nPreview: ${email.preview}`
     ).join('\n\n');
 
     const prompt = `You are an email triage assistant focused on ACTIONABILITY. Your job is to surface emails that require the user to DO something, not just emails that sound important.
@@ -168,7 +168,7 @@ Respond in JSON format with this exact structure:
 {
   "classifications": [
     {
-      "email_index": 0,
+      "email_id": "msg001",
       "category": "ACTIONABLE",
       "summary": "Medical appointment on Dec 22",
       "action": "Print and fill out questionnaire",
@@ -180,6 +180,8 @@ Respond in JSON format with this exact structure:
     }
   ]
 }
+
+IMPORTANT: You MUST include the email_id field for each classification. Use the exact email ID provided in the email list above (e.g., "msg001", "msg002", etc.).
 
 Only include emails that are ACTIONABLE or INFORMATIONAL in your response. Skip all others.`;
 
@@ -207,13 +209,29 @@ Only include emails that are ACTIONABLE or INFORMATIONAL in your response. Skip 
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       const classifications = jsonMatch ? JSON.parse(jsonMatch[0]) : { classifications: [] };
 
-      return classifications.classifications.map(c => ({
-        ...emailList[c.email_index],
-        category: c.category,
-        summary: c.summary,
-        action: c.action,
-        context: c.context || []
-      }));
+      // Create a map of email IDs to email objects for efficient lookup
+      const emailMap = new Map(emailList.map(email => [email.id, email]));
+
+      // Map classifications by email ID, filtering out any invalid references
+      return classifications.classifications
+        .filter(c => {
+          if (!c.email_id) {
+            console.warn('Classification missing email_id:', c);
+            return false;
+          }
+          if (!emailMap.has(c.email_id)) {
+            console.warn(`Classification references unknown email_id: ${c.email_id}`);
+            return false;
+          }
+          return true;
+        })
+        .map(c => ({
+          ...emailMap.get(c.email_id),
+          category: c.category,
+          summary: c.summary,
+          action: c.action,
+          context: c.context || []
+        }));
     } else if (selectedModel === 'gpt-4o-mini') {
       response = await fetch(`${API_BASE_URL}/api/openai/chat/completions`, {
         method: 'POST',
@@ -234,13 +252,29 @@ Only include emails that are ACTIONABLE or INFORMATIONAL in your response. Skip 
       const text = data.choices[0].message.content;
       const classifications = JSON.parse(text);
 
-      return classifications.classifications.map(c => ({
-        ...emailList[c.email_index],
-        category: c.category,
-        summary: c.summary,
-        action: c.action,
-        context: c.context || []
-      }));
+      // Create a map of email IDs to email objects for efficient lookup
+      const emailMap = new Map(emailList.map(email => [email.id, email]));
+
+      // Map classifications by email ID, filtering out any invalid references
+      return classifications.classifications
+        .filter(c => {
+          if (!c.email_id) {
+            console.warn('Classification missing email_id:', c);
+            return false;
+          }
+          if (!emailMap.has(c.email_id)) {
+            console.warn(`Classification references unknown email_id: ${c.email_id}`);
+            return false;
+          }
+          return true;
+        })
+        .map(c => ({
+          ...emailMap.get(c.email_id),
+          category: c.category,
+          summary: c.summary,
+          action: c.action,
+          context: c.context || []
+        }));
     }
   };
 
