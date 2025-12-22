@@ -92,9 +92,15 @@ PY
 }
 
 wait_for_port() {
-  local name=$1 port=$2
+  local name=$1 port=$2 pid=$3
   local elapsed=0
   until check_port "$port"; do
+    # Check if the process is still alive
+    if [[ -n "$pid" ]] && ! kill -0 "$pid" 2>/dev/null; then
+      err "$name process (pid $pid) died before opening port $port"
+      err "Check logs at $LOG_DIR for details"
+      return 1
+    fi
     if (( elapsed >= WAIT_TIMEOUT )); then
       err "$name did not open port $port within ${WAIT_TIMEOUT}s"
       return 1
@@ -149,11 +155,13 @@ main() {
 
   # Backend
   start_service "backend" "$BACKEND_CMD" "$BACKEND_DIR" "$LOG_DIR/backend.log"
-  wait_for_port "Backend" "$BACKEND_PORT"
+  local backend_pid="${pids[-1]}"
+  wait_for_port "Backend" "$BACKEND_PORT" "$backend_pid"
 
   # Frontend
   start_service "frontend" "$FRONTEND_CMD" "$FRONTEND_DIR" "$LOG_DIR/frontend.log"
-  wait_for_port "Frontend" "$FRONTEND_PORT"
+  local frontend_pid="${pids[-1]}"
+  wait_for_port "Frontend" "$FRONTEND_PORT" "$frontend_pid"
 
   open_browser "$FRONTEND_URL"
   info "Both services running. Press Ctrl+C to stop."
