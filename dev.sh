@@ -155,12 +155,12 @@ main() {
 
   # Backend
   start_service "backend" "$BACKEND_CMD" "$BACKEND_DIR" "$LOG_DIR/backend.log"
-  local backend_pid="${pids[-1]}"
+  local backend_pid="${pids[${#pids[@]}-1]}"
   wait_for_port "Backend" "$BACKEND_PORT" "$backend_pid"
 
   # Frontend
   start_service "frontend" "$FRONTEND_CMD" "$FRONTEND_DIR" "$LOG_DIR/frontend.log"
-  local frontend_pid="${pids[-1]}"
+  local frontend_pid="${pids[${#pids[@]}-1]}"
   wait_for_port "Frontend" "$FRONTEND_PORT" "$frontend_pid"
 
   open_browser "$FRONTEND_URL"
